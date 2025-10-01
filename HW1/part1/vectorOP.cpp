@@ -95,14 +95,33 @@ void clampedExpVector(float *values, int *exponents, float *output, int N)
 // You can assume VECTOR_WIDTH is a power of 2
 float arraySumVector(float *values, int N)
 {
-
   //
   // PP STUDENTS TODO: Implement your vectorized version of arraySumSerial here
   //
+  __pp_vec_float x;
+  __pp_vec_float sumVec = _pp_vset_float(0.0f); // float sum = 0;
+  __pp_mask maskAll = _pp_init_ones(VECTOR_WIDTH);
 
+  // O(N/VECTOR_WIDTH)
+  // summpose N = 12, VECTOR_WIDTH = 4, sumVec = [v0+v4+v8, v1+v5+v9, v2+v6+v10, v3+v7+v11]
   for (int i = 0; i < N; i += VECTOR_WIDTH)
   {
+    _pp_vload_float(x, values + i, maskAll);
+    _pp_vadd_float(sumVec, sumVec, x, maskAll);
+  }
+  
+  // w present lanes which value haven't add
+  int w = VECTOR_WIDTH;
+  while(w > 1) {
+    // pair add
+    _pp_hadd_float(sumVec, sumVec);
+    // even,odd
+    _pp_interleave_float(sumVec, sumVec);
+    w /= 2;
   }
 
-  return 0.0;
+  float buf[VECTOR_WIDTH];
+  _pp_vstore_float(buf, sumVec, maskAll);
+
+  return buf[0];
 }
