@@ -42,6 +42,7 @@ void worker_thread_start(WorkerArgs *const args)
     // modify it to pursue a better performance.
 
     // printf("Hello world from thread %d\n", args->threadId);
+    auto start = std::chrono::high_resolution_clock::now();
     int rows_per_thread = args->height / args->numThreads;
     int start_row = args->threadId * rows_per_thread;
 
@@ -50,7 +51,13 @@ void worker_thread_start(WorkerArgs *const args)
     }
 
     mandelbrot_serial(args->x0, args->y0, args->x1, args->y1, args->width, args->height, start_row, rows_per_thread, args->maxIterations, args->output);
-    printf("Thread %d finished rows [%d, %d)\n", args->threadId, start_row, start_row + rows_per_thread);
+    
+    // printf("Thread %d finished rows [%d, %d)\n", args->threadId, start_row, start_row + rows_per_thread);
+    // caculate time for Q2
+    auto end = std::chrono::high_resolution_clock::now();
+    double duration = std::chrono::duration<double, std::milli>(end - start).count();
+
+    printf("Thread %d finished rows [%d, %d) in %.3f ms\n", args->threadId, start_row, start_row + rows_per_thread, duration);
 }
 
 //
