@@ -41,7 +41,16 @@ void worker_thread_start(WorkerArgs *const args)
     // Of course, you can copy mandelbrot_serial() to this file and
     // modify it to pursue a better performance.
 
-    printf("Hello world from thread %d\n", args->threadId);
+    // printf("Hello world from thread %d\n", args->threadId);
+    int rows_per_thread = args->height / args->numThreads;
+    int start_row = args->threadId * rows_per_thread;
+
+    if(args->threadId == args->numThreads - 1) {
+        rows_per_thread = args->height - start_row;
+    }
+
+    mandelbrot_serial(args->x0, args->y0, args->x1, args->y1, args->width, args->height, start_row, rows_per_thread, args->maxIterations, args->output);
+    printf("Thread %d finished rows [%d, %d)\n", args->threadId, start_row, start_row + rows_per_thread);
 }
 
 //
