@@ -33,31 +33,35 @@ extern void mandelbrot_serial(float x0,
 void worker_thread_start(WorkerArgs *const args)
 {
 
-    // TODO FOR PP STUDENTS: Implement the body of the worker
-    // thread here. Each thread could make a call to mandelbrot_serial()
-    // to compute a part of the output image. For example, in a
-    // program that uses two threads, thread 0 could compute the top
-    // half of the image and thread 1 could compute the bottom half.
-    // Of course, you can copy mandelbrot_serial() to this file and
-    // modify it to pursue a better performance.
-
-    // printf("Hello world from thread %d\n", args->threadId);
     auto start = std::chrono::high_resolution_clock::now();
-    int rows_per_thread = args->height / args->numThreads;
-    int start_row = args->threadId * rows_per_thread;
 
-    if(args->threadId == args->numThreads - 1) {
-        rows_per_thread = args->height - start_row;
+    // ======================= compute ===================================
+    // Q1, Q2
+    // int rows_per_thread = args->height / args->numThreads;
+    // int start_row = args->threadId * rows_per_thread;
+    // if(args->threadId == args->numThreads - 1) {
+    //     rows_per_thread = args->height - start_row;
+    // }
+    // mandelbrot_serial(args->x0, args->y0, args->x1, args->y1, args->width, args->height, start_row, rows_per_thread, args->maxIterations, args->output);
+    
+    // Q3
+    for (int row = args->threadId; row < args->height; row += args->numThreads) {
+        mandelbrot_serial(args->x0, args->y0, args->x1, args->y1, args->width, args->height, row, 1, args->maxIterations, args->output);
     }
 
-    mandelbrot_serial(args->x0, args->y0, args->x1, args->y1, args->width, args->height, start_row, rows_per_thread, args->maxIterations, args->output);
-    
+    // ========================= output ====================================
+    // Q1
     // printf("Thread %d finished rows [%d, %d)\n", args->threadId, start_row, start_row + rows_per_thread);
-    // caculate time for Q2
+    
+    // caculate time
     auto end = std::chrono::high_resolution_clock::now();
     double duration = std::chrono::duration<double, std::milli>(end - start).count();
 
-    printf("Thread %d finished rows [%d, %d) in %.3f ms\n", args->threadId, start_row, start_row + rows_per_thread, duration);
+    // Q2
+    // printf("Thread %d finished rows [%d, %d) in %.3f ms\n", args->threadId, start_row, start_row + rows_per_thread, duration);
+
+    // Q3
+    printf("Thread %d (interleaved) finished in %.3f ms\n", args->threadId, duration);
 }
 
 //
