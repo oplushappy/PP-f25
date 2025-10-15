@@ -45,7 +45,7 @@ void worker_thread_start(WorkerArgs *const args)
     // mandelbrot_serial(args->x0, args->y0, args->x1, args->y1, args->width, args->height, start_row, rows_per_thread, args->maxIterations, args->output);
     
     // Q3
-    for (int row = args->threadId; row < args->height; row += args->numThreads) {
+    for (int row = args->threadId; row < (int)args->height; row += args->numThreads) {
         mandelbrot_serial(args->x0, args->y0, args->x1, args->y1, args->width, args->height, row, 1, args->maxIterations, args->output);
     }
 
