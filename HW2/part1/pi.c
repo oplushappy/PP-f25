@@ -19,7 +19,6 @@ uint32_t xorshift32(uint32_t *state) {
     return x;
 }
 
-
 void *calculate_pi(void *arg) {
     Arg* data = (Arg*) arg;
     long long int local_tosses = data->local_tosses;
@@ -28,10 +27,12 @@ void *calculate_pi(void *arg) {
     uint32_t state = (uint32_t)(time(NULL) ^ (uintptr_t)pthread_self());
 
     const float inverse_uint32_max = 1.0f / 4294967296.0f; // 2^32
+    const float scale = inverse_uint32_max * 2.0f;
+    const float bias = - 1.0f;
 
     for(long long int i = 0; i < local_tosses; i++) {
-      float x = (float)xorshift32(&state) * inverse_uint32_max * 2.0f - 1.0f;
-      float y = (float)xorshift32(&state) * inverse_uint32_max * 2.0f - 1.0f;
+      float x = (float)xorshift32(&state) * scale + bias;
+      float y = (float)xorshift32(&state) * scale + bias;
       if(x * x + y * y <= 1.0f) {
         local_hits++;
       }
