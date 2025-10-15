@@ -4,11 +4,16 @@
 #include <time.h>
 #include <stdint.h>
 
-long long int total_hits = 0;
-pthread_mutex_t mutex;
+
+typedef struct {
+    long long int local_tosses;
+    long long int local_hit;
+} Arg;
+
 
 void *calculate_pi(void *arg) {
-    long long int local_tosses = *(long long*)arg;
+    Arg* data = (Arg*) arg;
+    long long int local_tosses = data->local_tosses;
     long long int local_hits = 0;
     // unsigned int seed = time(NULL) ^ pthread_self(); // xor
     unsigned int seed = (unsigned int)(time(NULL) ^ (uintptr_t)pthread_self());
@@ -22,9 +27,7 @@ void *calculate_pi(void *arg) {
       }
     }
 
-    pthread_mutex_lock(&mutex);
-    total_hits += local_hits;
-    pthread_mutex_unlock(&mutex);
+    data->local_hit = local_hits;
     return NULL;
 }
 
@@ -40,20 +43,19 @@ int main(int argc, char* argv[]) {
     // pthread_t pthreads[num_pthreads];
     pthread_t * pthreads = (pthread_t*)malloc(sizeof(pthread_t) * num_pthreads);
 
-    // init mutex
-    pthread_mutex_init(&mutex, NULL);
     
     // ===================== compute ===============================
     // long long int every_tosses = tosses / num_pthreads;
     // there maybe not divisible 
     long long int base = tosses / num_pthreads;
     long long int remain = tosses % num_pthreads;
-    long long* arguments = (long long*)malloc(sizeof(long long) * num_pthreads);
+    Arg* args = malloc(sizeof(Arg) * num_pthreads);
 
     for(int i = 0; i < num_pthreads; i++) {
-        arguments[i] = base + (i < remain ? 1 : 0);
+        args[i].local_tosses = base + (i < remain ? 1 : 0);
+        args[i].local_hit = 0;
         // pthread_create(&pthreads[i], attribute, function, argument);
-        pthread_create(&pthreads[i], NULL, calculate_pi, &arguments[i]);
+        pthread_create(&pthreads[i], NULL, calculate_pi, &args[i]);
     }
 
     // wait
@@ -61,13 +63,16 @@ int main(int argc, char* argv[]) {
         pthread_join(pthreads[i], NULL);
     }
 
-    // ===================== end =================================
-    pthread_mutex_destroy(&mutex);
+    long long int total_hits = 0;
+    for(int i = 0; i < num_pthreads; i++) {
+        total_hits += args[i].local_hit;
+    }
 
+    // ===================== end =================================
     double pi = 4.0 * (double)total_hits / (double)tosses;
     printf("%lf\n", pi);
 
     free(pthreads);
-    free(arguments);
+    free(args);
     return 0;
 }
