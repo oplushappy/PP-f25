@@ -55,7 +55,7 @@ void *calculate_pi(void *arg) {
 
     if (i < local_tosses) {
         uint32_t tail = base ^ 0x9E3779B9u;
-        const float scale = inv2_32 * 2.0f, bias = -1.0f;
+        const float scale = inverse_uint32_max * 2.0f, bias = -1.0f;
         for (; i < local_tosses; i++) {
             // x
             tail ^= tail << 13; tail ^= tail >> 17; tail ^= tail << 5;
