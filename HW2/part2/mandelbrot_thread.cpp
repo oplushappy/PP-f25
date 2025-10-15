@@ -33,7 +33,7 @@ extern void mandelbrot_serial(float x0,
 void worker_thread_start(WorkerArgs *const args)
 {
 
-    auto start = std::chrono::high_resolution_clock::now();
+    // auto start = std::chrono::high_resolution_clock::now();
 
     // ======================= compute ===================================
     // Q1, Q2
@@ -54,14 +54,14 @@ void worker_thread_start(WorkerArgs *const args)
     // printf("Thread %d finished rows [%d, %d)\n", args->threadId, start_row, start_row + rows_per_thread);
     
     // caculate time
-    auto end = std::chrono::high_resolution_clock::now();
-    double duration = std::chrono::duration<double, std::milli>(end - start).count();
+    // auto end = std::chrono::high_resolution_clock::now();
+    // double duration = std::chrono::duration<double, std::milli>(end - start).count();
 
     // Q2
     // printf("Thread %d finished rows [%d, %d) in %.3f ms\n", args->threadId, start_row, start_row + rows_per_thread, duration);
 
     // Q3
-    printf("Thread %d (interleaved) finished in %.3f ms\n", args->threadId, duration);
+    // printf("Thread %d (interleaved) finished in %.3f ms\n", args->threadId, duration);
 }
 
 //
