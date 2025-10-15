@@ -33,18 +33,22 @@ void *calculate_pi(void *arg) {
     __m256i state = _mm256_load_si256((const __m256i*)s); // __m256i state = _mm256_setr_epi32(s0, s1, s2, s3, s4, s5, s6, s7);
     
 
-    const float inverse_uint32_max = 1.0f / 4294967296.0f; // 2^32
-    const __m256 v_scale = _mm256_set1_ps(inverse_uint32_max * 2.0f);
-    const __m256 v_bias = _mm256_set1_ps(-1.0f);
+    // const float inverse_uint32_max = 1.0f / 4294967296.0f; // 2^32
+    // const __m256 v_scale = _mm256_set1_ps(inverse_uint32_max * 2.0f);
+    // const __m256 v_bias = _mm256_set1_ps(-1.0f);
+    const __m256 v_scale = _mm256_set1_ps(1.0f / 2147483648.0f); // 2^31
     const __m256 v_one = _mm256_set1_ps(1.0f);
 
     long long int i = 0;
     for(; i + 7 < local_tosses; i+=8) {
       state = xorshift32_vec(state);
-      __m256 x = _mm256_add_ps(_mm256_mul_ps(_mm256_cvtepi32_ps(state), v_scale), v_bias);
-      
+      // pitfall, _mm256_cvtepi32_ps: use int to float , not unsigned int to float 
+      // __m256 x = _mm256_add_ps(_mm256_mul_ps(_mm256_cvtepi32_ps(state), v_scale), v_bias);
+      __m256 x = _mm256_mul_ps(_mm256_cvtepi32_ps(state), v_scale);
+       
       state = xorshift32_vec(state);
-      __m256 y = _mm256_add_ps(_mm256_mul_ps(_mm256_cvtepi32_ps(state), v_scale), v_bias);
+      // __m256 y = _mm256_add_ps(_mm256_mul_ps(_mm256_cvtepi32_ps(state), v_scale), v_bias);
+      __m256 y = _mm256_mul_ps(_mm256_cvtepi32_ps(state), v_scale);
 
       __m256 distance = _mm256_fmadd_ps(x, x, _mm256_mul_ps(y, y)); 
 
@@ -55,7 +59,8 @@ void *calculate_pi(void *arg) {
 
     if (i < local_tosses) {
         uint32_t tail = base ^ 0x9E3779B9u;
-        const float scale = inverse_uint32_max * 2.0f, bias = -1.0f;
+        const float scale = 1.0f / 4294967296.0f * 2.0f;
+        const float bias = -1.0f;
         for (; i < local_tosses; i++) {
             // x
             tail ^= tail << 13; tail ^= tail >> 17; tail ^= tail << 5;
