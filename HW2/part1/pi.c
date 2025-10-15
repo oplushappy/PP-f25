@@ -10,19 +10,29 @@ typedef struct {
     long long int local_hit;
 } Arg;
 
+uint32_t xorshift32(uint32_t *state) {
+    uint32_t x = *state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    *state = x;
+    return x;
+}
+
 
 void *calculate_pi(void *arg) {
     Arg* data = (Arg*) arg;
     long long int local_tosses = data->local_tosses;
     long long int local_hits = 0;
     // unsigned int seed = time(NULL) ^ pthread_self(); // xor
-    unsigned int seed = (unsigned int)(time(NULL) ^ (uintptr_t)pthread_self());
+    uint32_t state = (uint32_t)(time(NULL) ^ (uintptr_t)pthread_self());
 
+    const float inverse_uint32_max = 1.0f / 4294967296.0f; // 2^32
 
     for(long long int i = 0; i < local_tosses; i++) {
-      double x = (double)rand_r(&seed) / RAND_MAX * 2.0 - 1.0;
-      double y = (double)rand_r(&seed) / RAND_MAX * 2.0 - 1.0;
-      if(x * x + y * y <= 1.0) {
+      float x = (float)xorshift32(&state) * inverse_uint32_max * 2.0f - 1.0f;
+      float y = (float)xorshift32(&state) * inverse_uint32_max * 2.0f - 1.0f;
+      if(x * x + y * y <= 1.0f) {
         local_hits++;
       }
     }

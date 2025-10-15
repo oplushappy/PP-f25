@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -O3 -march=native -mtune=native -Wall
+CFLAGS = -O3 -march=native -mtune=native -ffast-math -Wall
 LDFLAGS = -pthread
 
 pi.out: pi.c
