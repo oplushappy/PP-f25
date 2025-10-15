@@ -2,8 +2,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <thread>
-#include <xmmintrin.h>   // SSE
-#include <emmintrin.h>   // SSE2
+#include <immintrin.h>
 
 struct WorkerArgs
 {
@@ -20,48 +19,42 @@ struct WorkerArgs
 namespace
 {
 
-__m128i mandel_vec(__m128 c_re, __m128 c_im, int count)
+__m256i mandel_vec(__m256 c_re, __m256 c_im, int count)
 {
-    __m128 z_re = c_re, z_im = c_im;
-    __m128i iter = _mm_setzero_si128();
-    const __m128i one = _mm_set1_epi32(1);
-    const __m128 four = _mm_set1_ps(4.f);
-    const __m128 two = _mm_set1_ps(2.f);
+    __m256 z_re = c_re, z_im = c_im;
+    __m256i iter = _mm256_setzero_si256();
+    const __m256i one = _mm256_set1_epi32(1);
+    const __m256 four = _mm256_set1_ps(4.f);
+    const __m256 two = _mm256_set1_ps(2.f);
 
     for (int i = 0; i < count; ++i)
     {
 
-        __m128 zr2 = _mm_mul_ps(z_re, z_re);
-        __m128 zi2 = _mm_mul_ps(z_im, z_im);
-        __m128 mag2 = _mm_add_ps(zr2, zi2);
+        __m256 zr2 = _mm256_mul_ps(z_re, z_re);
+        __m256 zi2 = _mm256_mul_ps(z_im, z_im);
+        __m256 mag2 = _mm256_add_ps(zr2, zi2);
 
         // if (z_re * z_re + z_im * z_im > 4.f)
         //     break;
-        __m128 active_ps = _mm_cmple_ps(mag2, four);
-        int mask = _mm_movemask_ps(active_ps);
+        __m256 active_ps = _mm256_cmp_ps(mag2, four, _CMP_LE_OQ);
+        int mask = _mm256_movemask_ps(active_ps);
         if(mask == 0) break;
 
-        __m128i active_i = _mm_castps_si128(active_ps);
-        iter = _mm_add_epi32(iter, _mm_and_si128(active_i, one)); // 0xFFFFFFFF = -1
+        __m256i active_i = _mm256_castps_si256(active_ps);
+        iter = _mm256_add_epi32(iter, _mm256_and_si256(active_i, one)); // 0xFFFFFFFF = -1
 
         // float new_re = (z_re * z_re) - (z_im * z_im);
-        __m128 new_re = _mm_sub_ps(zr2, zi2);
+        __m256 new_re = _mm256_sub_ps(zr2, zi2);
         // float new_im = 2.f * z_re * z_im;
-        __m128 new_im = _mm_mul_ps(_mm_mul_ps(two, z_re), z_im);
+        __m256 new_im = _mm256_mul_ps(_mm256_mul_ps(two, z_re), z_im);
         // z_re = c_re + new_re;
-        __m128 z_re_next = _mm_add_ps(c_re, new_re);
+        __m256 z_re_next = _mm256_add_ps(c_re, new_re);
         // z_im = c_im + new_im;
-        __m128 z_im_next = _mm_add_ps(c_im, new_im);
+        __m256 z_im_next = _mm256_add_ps(c_im, new_im);
 
-        // z_re = _mm_blendv_ps(z_re, z_re_next, active_ps);
-        // z_im = _mm_blendv_ps(z_im, z_im_next, active_ps);
-        __m128 keep_old = _mm_andnot_ps(active_ps, z_re);
-        __m128 take_new = _mm_and_ps(active_ps, z_re_next);
-        z_re = _mm_or_ps(keep_old, take_new);
+        z_re = _mm256_blendv_ps(z_re, z_re_next, active_ps);
+        z_im = _mm256_blendv_ps(z_im, z_im_next, active_ps);
 
-        keep_old = _mm_andnot_ps(active_ps, z_im);
-        take_new = _mm_and_ps(active_ps, z_im_next);
-        z_im = _mm_or_ps(keep_old, take_new);
     }
 
     return iter;
@@ -87,23 +80,24 @@ static void mandelbrot_serial(float x0,
 
     for (int j = start_row; j < end_row; j++)
     {
-        for (int i = 0; i < width; i+=4)
+        for (int i = 0; i < width; i+=8)
         {
             // float x = x0 + ((float)i * dx);
-            __m128 x = _mm_set_ps(
+            __m256 x = _mm256_set_ps(
+                x0+(i+7)*dx, x0+(i+6)*dx, x0+(i+5)*dx, x0+(i+4)*dx,
                 x0+(i+3)*dx, x0+(i+2)*dx, x0+(i+1)*dx, x0+(i+0)*dx
             );
             // float y = y0 + ((float)j * dy);
-            __m128 y = _mm_set1_ps(y0+j*dy);
+            __m256 y = _mm256_set1_ps(y0+j*dy);
 
             // int index = ((j * width) + i);
             // output[index] = mandel(x, y, max_iterations);
-            __m128i it = mandel_vec(x, y, max_iterations);
+            __m256i it = mandel_vec(x, y, max_iterations);
             
-            alignas(32) int buf[4];
-            _mm_store_si128((__m128i*)buf, it);
+            alignas(32) int buf[8];
+            _mm256_store_si256((__m256i*)buf, it);
             int row_base = j * width;
-            for(int k = 0; k < 4; k++) {
+            for(int k = 0; k < 8; k++) {
                 output[row_base + i + k] = buf[k];
             }
 
