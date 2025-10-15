@@ -62,7 +62,7 @@ __m256i mandel_vec(__m256 c_re, __m256 c_im, int count)
 
 }
 
-void mandelbrot_serial(float x0,
+static void mandelbrot_serial(float x0,
                         float y0,
                         float x1,
                         float y1,
