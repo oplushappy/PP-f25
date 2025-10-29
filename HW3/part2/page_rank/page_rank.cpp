@@ -109,7 +109,7 @@ void page_rank(Graph g, double *solution, double damping, double convergence)
         for (int i = 0; i < N; ++i)
             diff += std::fabs(new_score[i] - old_score[i]);
 
-        if ((diff / N) < convergence)
+        if (diff < convergence)
             break;
 
         // (d) 準備下一輪迭代
@@ -117,16 +117,10 @@ void page_rank(Graph g, double *solution, double damping, double convergence)
             old_score[i] = new_score[i];
     }
 
-    // 5️⃣ 正規化結果（確保總和 = 1）
-    double sum = 0.0;
     for (int i = 0; i < N; ++i)
-        sum += new_score[i];
-    double inv = (sum > 0.0) ? 1.0 / sum : 1.0 / N;
+        solution[i] = new_score[i];
 
-    for (int i = 0; i < N; ++i)
-        solution[i] = new_score[i] * inv;
-
-    // 6️⃣ 釋放記憶體
+    // 釋放記憶體
     delete[] old_score;
     delete[] new_score;
     delete[] outdeg;
