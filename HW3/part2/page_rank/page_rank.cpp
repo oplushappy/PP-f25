@@ -57,54 +57,77 @@ void page_rank(Graph g, double *solution, double damping, double convergence)
     const int N = num_nodes(g);
     if (N == 0) return;
 
-    std::vector<double> old_score(N), new_score(N);
-    for (int i = 0; i < N; ++i) old_score[i] = 1/N; // 初始化為 1/N
+    // 1️⃣ 配置記憶體
+    double *old_score = new double[N];
+    double *new_score = new double[N];
+    int *outdeg = new int[N];
 
-    std::vector<int> outdeg(N);
+    // 2️⃣ 初始化：所有節點初始分數均為 1/N
+    for (int i = 0; i < N; ++i)
+        old_score[i] = 1.0 / N;
+
+    // 3️⃣ 預先計算每個節點的出度（out-degree）
     for (int v = 0; v < N; ++v)
         outdeg[v] = outgoing_size(g, v);
 
+    // 4️⃣ 主要迴圈（直到收斂）
     while (true) {
-        // 1️⃣ 計算 dangling mass：出度為 0 的節點分數總和
+        // (a) 計算 dangling mass：出度為 0 的節點分數總和
         double dangling_sum = 0.0;
         for (int v = 0; v < N; ++v)
-            if (outdeg[v] == 0) dangling_sum += old_score[v];
+            if (outdeg[v] == 0)
+                dangling_sum += old_score[v];
 
-        // 2️⃣ 計算每個節點的新分數
+        // (b) 計算每個節點的新分數
         for (int i = 0; i < N; ++i) {
             double inbound = 0.0;
+
+            // 對於所有指向 i 的節點 j（即 j → i）
             const Vertex *beg = incoming_begin(g, i);
             const Vertex *end = incoming_end(g, i);
             for (const Vertex *p = beg; p != end; ++p) {
-                int j = *p; // j → i
+                int j = *p;
                 int dj = outdeg[j];
-                if (dj > 0) inbound += old_score[j] / (double)dj;
+                if (dj > 0)
+                    inbound += old_score[j] / (double)dj;
             }
 
-            // 三個部分分開相加（順序固定）
+            // PageRank 三部分公式：
+            // 1. teleport term
+            // 2. dangling node redistribution term
+            // 3. inbound contribution term
             double val = 0.0;
-            val += (1.0 - damping) / N;         // teleport
-            val += damping * (dangling_sum / N); // dangling nodes 平均分配
-            val += damping * inbound;            // 來自入邊的加權
+            val += (1.0 - damping) / N;
+            val += damping * (dangling_sum / N);
+            val += damping * inbound;
+
             new_score[i] = val;
         }
 
-        // 3️⃣ 計算差距以檢查收斂
+        // (c) 檢查收斂：計算新舊分數的平均差距
         double diff = 0.0;
         for (int i = 0; i < N; ++i)
             diff += std::fabs(new_score[i] - old_score[i]);
 
-        // 4️⃣ 收斂條件：使用平均差
-        if ((diff / N) < convergence) break;
+        if ((diff / N) < convergence)
+            break;
 
-        std::swap(old_score, new_score);
+        // (d) 準備下一輪迭代
+        for (int i = 0; i < N; ++i)
+            old_score[i] = new_score[i];
     }
 
-    // 5️⃣ 正規化結果（保險避免累積誤差）
+    // 5️⃣ 正規化結果（確保總和 = 1）
     double sum = 0.0;
-    for (int i = 0; i < N; ++i) sum += new_score[i];
+    for (int i = 0; i < N; ++i)
+        sum += new_score[i];
     double inv = (sum > 0.0) ? 1.0 / sum : 1.0 / N;
 
     for (int i = 0; i < N; ++i)
         solution[i] = new_score[i] * inv;
+
+    // 6️⃣ 釋放記憶體
+    delete[] old_score;
+    delete[] new_score;
+    delete[] outdeg;
 }
