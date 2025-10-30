@@ -65,6 +65,10 @@ void page_rank(Graph g, double *solution, double damping, double convergence)
 
 
     bool done = false;
+    double dangling_sum = 0.0;
+    double diff = 0.0;
+    double base = 0.0;
+
     #pragma omp parallel
     {
         // 2️. 初始化：所有節點初始分數均為 1/N
@@ -83,15 +87,27 @@ void page_rank(Graph g, double *solution, double damping, double convergence)
             inv_outdeg[v] = (outdeg[v] > 0) ? (1.0 / (double)outdeg[v]) : 0.0;
 
         while (true) {
+            #pragma omp single
+            {
+                dangling_sum = 0.0;
+                diff = 0.0;
+            }
+            #pragma omp barrier
+
             // 4️. 主要迴圈（直到收斂）
             // (a) 計算 dangling mass：出度為 0 的節點分數總和
-            double dangling_sum = 0.0;
+            // double dangling_sum = 0.0;
             #pragma omp for reduction(+:dangling_sum) schedule(static)
             for (int v = 0; v < N; ++v)
                 if (outdeg[v] == 0) dangling_sum += old_score[v];
 
-            const double base = (1.0 - damping) / (double)N + damping * (dangling_sum / (double)N);
-            double diff = 0.0;
+            // const double base = (1.0 - damping) / (double)N + damping * (dangling_sum / (double)N);
+            // double diff = 0.0;
+            #pragma omp single
+            {
+                base = (1.0 - damping) / (double)N + damping * (dangling_sum / (double)N);
+            }
+            #pragma omp barrier
 
             // (b) 計算每個節點的新分數
             #pragma omp for reduction(+:diff) schedule(guided,1024)
@@ -120,7 +136,7 @@ void page_rank(Graph g, double *solution, double damping, double convergence)
                 // val += (1.0 - damping) / N;
                 // val += damping * (dangling_sum / N);
                 // val += damping * inbound;
-                double val = base + damping * inbound;
+                const double val = base + damping * inbound;
                 new_score[i] = val;
                 diff += fabs(val - old_score[i]);
             }
