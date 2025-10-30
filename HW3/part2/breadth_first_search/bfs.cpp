@@ -65,39 +65,85 @@ void top_down_step(Graph g, VertexSet *frontier, VertexSet *new_frontier, int *d
 // 最後再把所有 thread 的 local 結果「合併」到共用的 new_frontier。
 void top_down_step_parallel(Graph g, VertexSet *frontier, VertexSet *new_frontier, int *distances) {
     // 每執行緒一個 local 暫存，避免 new_frontier->count++ 的競爭
-    int P = omp_get_max_threads();
-    std::vector<std::vector<int>> locals(P);
+    // int P = omp_get_max_threads();
+    // std::vector<std::vector<int>> locals(P);
+    int *sizes = nullptr, *offs = nullptr;
+    int base = 0;
+    #pragma omp parallel
+    {
+        std::vector<int> local;
+        local.reserve(std::max(64, (int)frontier->count / omp_get_num_threads() * 2));
 
-    #pragma omp parallel for schedule(dynamic,64)
-    for (int i = 0; i < frontier->count; i++) {
-        int v = frontier->vertices[i];
+        #pragma omp for schedule(dynamic,64)
+        for (int i = 0; i < frontier->count; i++) {
+            int v = frontier->vertices[i];
 
-        int start_edge = g->outgoing_starts[v];
-        int end_edge   = (v == g->num_nodes - 1) ? g->num_edges: g->outgoing_starts[v + 1];
+            int start_edge = g->outgoing_starts[v];
+            int end_edge   = (v == g->num_nodes - 1) ? g->num_edges: g->outgoing_starts[v + 1];
 
-        int tid = omp_get_thread_num();
-        auto& local = locals[tid];
+            // int tid = omp_get_thread_num();
+            // auto& local = locals[tid];
 
-        for (int e = start_edge; e < end_edge; ++e) {
-            int n = g->outgoing_edges[e];
+            for (int e = start_edge; e < end_edge; ++e) {
+                int n = g->outgoing_edges[e];
 
-            // 先做便宜的快速失敗：已訪問就略過，不做 CAS
-            if (distances[n] != NOT_VISITED_MARKER) continue;
+                // 先做便宜的快速失敗：已訪問就略過，不做 CAS
+                if (distances[n] != NOT_VISITED_MARKER) continue;
 
-            // 原子「認領」：只有第一個成功的人能設定距離與入隊
-            if (__sync_bool_compare_and_swap(&distances[n], NOT_VISITED_MARKER, distances[v] + 1)) {
-                local.push_back(n);
+                // 原子「認領」：只有第一個成功的人能設定距離與入隊
+                if (__sync_bool_compare_and_swap(&distances[n], NOT_VISITED_MARKER, distances[v] + 1)) {
+                    local.push_back(n);
+                }
             }
         }
+        // 2) 合併所有 threads 的 local 結果到 new_frontier
+        // for (int t = 0; t < P; t++) {
+        //     for (int node : locals[t]) {
+        //         int idx = new_frontier->count++;          // 這裡單執行緒，安全
+        //         new_frontier->vertices[idx] = node;
+        //     }
+        // }
+
+        // 收集 sizes + prefix-sum + 平行回填
+        // 2) single：只做一次共享陣列配置
+        #pragma omp single
+        {
+            int T = omp_get_num_threads();
+            sizes = new int[T];
+            offs  = new int[T];
+        }
+
+        // 3) 每條 thread 回報 local.size()
+        int tid = omp_get_thread_num();
+        sizes[tid] = (int)local.size();
+
+        // 4) 大家對齊一次，確保 sizes 都寫好了
+        #pragma omp barrier
+
+        // 5) single：做 prefix-sum + 一次性擴長 new_frontier->count
+        #pragma omp single
+        {
+            int T = omp_get_num_threads(), total=0;
+            for (int t=0; t<T; ++t) { 
+                offs[t] = total; 
+                total += sizes[t]; 
+            }
+            base = new_frontier->count;
+            new_frontier->count += total;
+        }
+
+        // 6) 各自平行回填自己的那一段（無競爭）
+        int dst = base + offs[tid];
+        for (int x : local) new_frontier->vertices[dst++] = x;
+
+        // 7) single：釋放共享陣列
+        #pragma omp single
+        {
+            delete[] sizes;
+            delete[] offs;
+    }
     }
 
-    // 2) 合併所有 threads 的 local 結果到 new_frontier
-    for (int t = 0; t < P; t++) {
-        for (int node : locals[t]) {
-            int idx = new_frontier->count++;          // 這裡單執行緒，安全
-            new_frontier->vertices[idx] = node;
-        }
-    }
 }
 
 // 單步：bottom-up（序列版）
