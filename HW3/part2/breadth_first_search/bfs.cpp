@@ -243,8 +243,8 @@ void bfs_bottom_up(Graph graph, solution *sol)
         std::fill(next_frontier.begin(), next_frontier.end(), 0);
 
         // 做一層 bottom-up
-        bottom_up_step_serial(graph, in_frontier.data(), next_frontier.data(), sol->distances, curr_depth);
-        int next_count = bottom_up_step_parallel(graph, in_frontier.data(), next_frontrier.data(), sol->distances, curr_depth);
+        // bottom_up_step_serial(graph, in_frontier.data(), next_frontier.data(), sol->distances, curr_depth);
+        int next_count = bottom_up_step_parallel(graph, in_frontier.data(), next_frontier.data(), sol->distances, curr_depth);
 
 #ifdef VERBOSE
         double t1 = CycleTimer::current_seconds();
