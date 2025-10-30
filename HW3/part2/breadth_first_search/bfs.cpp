@@ -58,6 +58,45 @@ void top_down_step(Graph g, VertexSet *frontier, VertexSet *new_frontier, int *d
     }
 }
 
+// 每個 thread 先暫存在自己獨立的 local buffer（locals[tid]）裡，
+// 最後再把所有 thread 的 local 結果「合併」到共用的 new_frontier。
+void top_down_step_parallel(Graph g, VertexSet *frontier, VertexSet *new_frontier, int *distances) {
+    // 每執行緒一個 local 暫存，避免 new_frontier->count++ 的競爭
+    int P = omp_get_max_threads();
+    std::vector<std::vector<int>> locals(P);
+
+    #pragma omp parallel for schedule(dynamic,64)
+    for (int i = 0; i < frontier->count; i++) {
+        int v = frontier->vertices[i];
+
+        int start_edge = g->outgoing_starts[v];
+        int end_edge   = (v == g->num_nodes - 1) ? g->num_edges: g->outgoing_starts[v + 1];
+
+        int tid = omp_get_thread_num();
+        auto& local = locals[tid];
+
+        for (int e = start_edge; e < end_edge; ++e) {
+            int n = g->outgoing_edges[e];
+
+            // 先做便宜的快速失敗：已訪問就略過，不做 CAS
+            if (distances[n] != NOT_VISITED_MARKER) continue;
+
+            // 原子「認領」：只有第一個成功的人能設定距離與入隊
+            if (__sync_bool_compare_and_swap(&distances[n], NOT_VISITED_MARKER, distances[v] + 1)) {
+                local.push_back(n);
+            }
+        }
+    }
+
+    // 2) 合併所有 threads 的 local 結果到 new_frontier
+    for (int t = 0; t < P; t++) {
+        for (int node : locals[t]) {
+            int idx = new_frontier->count++;          // 這裡單執行緒，安全
+            new_frontier->vertices[idx] = node;
+        }
+    }
+}
+
 // Implements top-down BFS.
 //
 // Result of execution is that, for each node in the graph, the
@@ -90,7 +129,8 @@ void bfs_top_down(Graph graph, solution *sol)
 
         vertex_set_clear(new_frontier);
 
-        top_down_step(graph, frontier, new_frontier, sol->distances);
+        // top_down_step(graph, frontier, new_frontier, sol->distances);
+        top_down_step_parallel(graph, frontier, new_frontier, sol->distances);
 
 #ifdef VERBOSE
         double end_time = CycleTimer::current_seconds();
