@@ -271,7 +271,7 @@ void bfs_bottom_up(Graph graph, solution *sol)
 // α = 14、β = 24
 void bfs_hybrid(Graph graph, solution *sol)
 {
-    const int N = g->num_nodes;
+    const int N = graph->num_nodes;
     if (N == 0) return;
 
     // 1) 初始化 distances
