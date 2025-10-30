@@ -356,7 +356,7 @@ void bfs_hybrid(Graph graph, solution *sol)
             vertex_set_clear(next_list);
 
             // 你已完成的平行 Top-Down
-            top_down_step_parallel(g, frontier_list, next_list, sol->distances);
+            top_down_step_parallel(graph, frontier_list, next_list, sol->distances);
             produced = next_list->count;
 
             // 更新 mu：把本層新發現節點的 indeg 從 mu 扣掉
@@ -378,7 +378,7 @@ void bfs_hybrid(Graph graph, solution *sol)
             std::fill(next_bm.begin(), next_bm.end(), 0);
 
             // 你已完成的平行 Bottom-Up（回傳下一層大小）
-            produced = bottom_up_step_parallel(g,
+            produced = bottom_up_step_parallel(graph,
                                                frontier_bm.data(),
                                                next_bm.data(),
                                                sol->distances,
