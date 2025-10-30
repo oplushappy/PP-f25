@@ -131,17 +131,19 @@ void top_down_step_parallel(Graph g, VertexSet *frontier, VertexSet *new_frontie
             base = new_frontier->count;
             new_frontier->count += total;
         }
+        #pragma omp barrier
 
         // 6) 各自平行回填自己的那一段（無競爭）
         int dst = base + offs[tid];
         for (int x : local) new_frontier->vertices[dst++] = x;
 
+        #pragma omp barrier
         // 7) single：釋放共享陣列
         #pragma omp single
         {
             delete[] sizes;
             delete[] offs;
-    }
+        }
     }
 
 }
