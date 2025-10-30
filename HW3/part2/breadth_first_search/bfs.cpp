@@ -295,8 +295,8 @@ void bfs_hybrid(Graph graph, solution *sol)
     // 4) mu：未訪問節點，可能要檢查的邊數上界（先用所有 indeg 總和，之後遞減）
     long long mu = 0;
     for (int v = 0; v < N; ++v) {
-        int beg = g->incoming_starts[v];
-        int end = (v == N - 1) ? g->num_edges : g->incoming_starts[v + 1];
+        int beg = graph->incoming_starts[v];
+        int end = (v == N - 1) ? graph->num_edges : graph->incoming_starts[v + 1];
         mu += (end - beg);
     }
 
@@ -324,8 +324,8 @@ void bfs_hybrid(Graph graph, solution *sol)
         if (mode == TOPDOWN) {
             for (int i = 0; i < frontier_list->count; ++i) {
                 int v = frontier_list->vertices[i];
-                int s = g->outgoing_starts[v];
-                int e = (v == N - 1) ? g->num_edges : g->outgoing_starts[v + 1];
+                int s = graph->outgoing_starts[v];
+                int e = (v == N - 1) ? graph->num_edges : graph->outgoing_starts[v + 1];
                 mf += (e - s);
             }
         }
@@ -362,8 +362,8 @@ void bfs_hybrid(Graph graph, solution *sol)
             // 更新 mu：把本層新發現節點的 indeg 從 mu 扣掉
             for (int i = 0; i < next_list->count; ++i) {
                 int v = next_list->vertices[i];
-                int beg = g->incoming_starts[v];
-                int end = (v == N - 1) ? g->num_edges : g->incoming_starts[v + 1];
+                int beg = graph->incoming_starts[v];
+                int end = (v == N - 1) ? graph->num_edges : graph->incoming_starts[v + 1];
                 mu -= (end - beg);
             }
 
@@ -388,8 +388,8 @@ void bfs_hybrid(Graph graph, solution *sol)
             if (produced > 0) {
                 for (int v = 0; v < N; ++v)
                     if (next_bm[v]) {
-                        int beg = g->incoming_starts[v];
-                        int end = (v == N - 1) ? g->num_edges : g->incoming_starts[v + 1];
+                        int beg = graph->incoming_starts[v];
+                        int end = (v == N - 1) ? graph->num_edges : graph->incoming_starts[v + 1];
                         mu -= (end - beg);
                     }
             }
