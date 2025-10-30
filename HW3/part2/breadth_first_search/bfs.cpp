@@ -126,6 +126,35 @@ static void bottom_up_step_serial(Graph g, const unsigned char* in_frontier, uns
     }
 }
 
+// 平行版：bottom-up（回傳下一層 frontier 的節點數）
+// 外層併行、內層序跑＋早停
+static int bottom_up_step_parallel(Graph g, const unsigned char *in_frontier, unsigned char *next_frontier, int *distances, int curr_depth)
+{
+    const int N = g->num_nodes;
+    int next_count = 0;
+
+    // 每個執行緒處理一批 v；每個 v 只被自己那個執行緒寫 → 不衝突
+    #pragma omp parallel for schedule(static) reduction(+:next_count)
+    for (int v = 0; v < N; ++v) {
+        if (distances[v] != NOT_VISITED_MARKER) continue;
+
+        int beg = g->incoming_starts[v];
+        int end = (v == N - 1) ? g->num_edges : g->incoming_starts[v + 1];
+
+        for (int ei = beg; ei < end; ++ei) {
+            int u = g->incoming_edges[ei];
+            if (in_frontier[u]) {               // 找到任一父在 frontier 就早停
+                distances[v] = curr_depth + 1;  // v 只會被自己寫，不需原子
+                next_frontier[v] = 1;           // 每個執行緒只寫自己的 v
+                next_count += 1;                // 只在「第一次命中」時 +1
+                break;
+            }
+        }
+    }
+
+    return next_count;
+}
+
 // Implements top-down BFS.
 //
 // Result of execution is that, for each node in the graph, the
@@ -214,18 +243,15 @@ void bfs_bottom_up(Graph graph, solution *sol)
         std::fill(next_frontier.begin(), next_frontier.end(), 0);
 
         // 做一層 bottom-up
-        bottom_up_step_serial(graph,
-                              in_frontier.data(),
-                              next_frontier.data(),
-                              sol->distances,
-                              curr_depth);
+        bottom_up_step_serial(graph, in_frontier.data(), next_frontier.data(), sol->distances, curr_depth);
+        int next_count = bottom_up_step_parallel(graph, in_frontier.data(), next_frontrier.data(), sol->distances, curr_depth);
 
 #ifdef VERBOSE
         double t1 = CycleTimer::current_seconds();
 #endif
-        // 計下一層大小（也可省略改用旗標）
-        int next_count = 0;
-        for (int v = 0; v < N; ++v) next_count += next_frontier[v];
+        // serial 計下一層大小（也可省略改用旗標）
+        // int next_count = 0;
+        // for (int v = 0; v < N; ++v) next_count += next_frontier[v];
 
 #ifdef VERBOSE
         printf("frontier=%-10d %.4f sec\n", next_count, t1 - t0);
