@@ -263,10 +263,149 @@ void bfs_bottom_up(Graph graph, solution *sol)
     }
 }
 
+// nf：當前 frontier 節點數。
+// mf：frontier 會檢的邊數（把 frontier 中每個點的 out-degree 加總）。
+// mu：未拜訪節點可能要檢的邊數上界（把還沒被發現的節點的 incoming 或 undirected degree 加總；可逐層遞減維護，或直接掃一次）。
+// Top-down → Bottom-up：若 mf > mu / α（代表 frontier 很大，用 bottom-up 較省邊檢查）。
+// Bottom-up → Top-down：若 nf < N / β（frontier 又小了，回到 top-down 比較省）。
+// α = 14、β = 24
 void bfs_hybrid(Graph graph, solution *sol)
 {
-    // For PP students:
-    //
-    // You will need to implement the "hybrid" BFS here as
-    // described in the handout.
+    const int N = g->num_nodes;
+    if (N == 0) return;
+
+    // 1) 初始化 distances
+    for (int i = 0; i < N; ++i) sol->distances[i] = NOT_VISITED_MARKER;
+
+    // 2) 準備 two-frontier：list (for Top-Down) + bitmap (for Bottom-Up)
+    VertexSet list1, list2;
+    vertex_set_init(&list1, N);
+    vertex_set_init(&list2, N);
+    VertexSet* frontier_list = &list1;
+    VertexSet* next_list     = &list2;
+
+    std::vector<unsigned char> frontier_bm(N, 0), next_bm(N, 0);
+
+    // 3) root
+    sol->distances[ROOT_NODE_ID] = 0;
+    frontier_list->vertices[frontier_list->count++] = ROOT_NODE_ID;
+    frontier_bm[ROOT_NODE_ID] = 1; // 若一開始就選 bottom-up 也方便
+
+    // “edges to check from unexplored vertices (μ)”
+    // 4) mu：未訪問節點，可能要檢查的邊數上界（先用所有 indeg 總和，之後遞減）
+    long long mu = 0;
+    for (int v = 0; v < N; ++v) {
+        int beg = g->incoming_starts[v];
+        int end = (v == N - 1) ? g->num_edges : g->incoming_starts[v + 1];
+        mu += (end - beg);
+    }
+
+    // 5) 切換門檻（論文建議值）
+    enum Mode { TOPDOWN, BOTTOMUP } mode = TOPDOWN;
+    const int alpha = 14;   // TD->BU: if mf > mu/alpha
+    const int beta  = 24;   // BU->TD: if nf < N/beta
+
+    int depth = 0;
+
+    while (true) {
+        // frontier size nf
+        int nf = (mode == TOPDOWN)
+               ? frontier_list->count
+               : (int)std::count(frontier_bm.begin(), frontier_bm.end(), 1);
+
+        if (nf == 0) break;
+
+#ifdef VERBOSE
+        double t0 = CycleTimer::current_seconds();
+#endif
+
+        // 6) 計算 mf（frontier 出度邊數總和），僅在 Top-Down 模式需要
+        long long mf = 0;
+        if (mode == TOPDOWN) {
+            for (int i = 0; i < frontier_list->count; ++i) {
+                int v = frontier_list->vertices[i];
+                int s = g->outgoing_starts[v];
+                int e = (v == N - 1) ? g->num_edges : g->outgoing_starts[v + 1];
+                mf += (e - s);
+            }
+        }
+
+        // 7) 依啟發式決定是否切換模式
+        if (mode == TOPDOWN) {
+            if (mf > mu / alpha) {
+                // list -> bitmap
+                std::fill(frontier_bm.begin(), frontier_bm.end(), 0);
+                for (int i = 0; i < frontier_list->count; ++i)
+                    frontier_bm[frontier_list->vertices[i]] = 1;
+                mode = BOTTOMUP;
+            }
+        } else { // BOTTOMUP
+            if (nf < N / beta) {
+                // bitmap -> list
+                vertex_set_clear(frontier_list);
+                for (int v = 0; v < N; ++v)
+                    if (frontier_bm[v])
+                        frontier_list->vertices[frontier_list->count++] = v;
+                mode = TOPDOWN;
+            }
+        }
+
+        // 8) 做一層
+        int produced = 0;
+        if (mode == TOPDOWN) {
+            vertex_set_clear(next_list);
+
+            // 你已完成的平行 Top-Down
+            top_down_step_parallel(g, frontier_list, next_list, sol->distances);
+            produced = next_list->count;
+
+            // 更新 mu：把本層新發現節點的 indeg 從 mu 扣掉
+            for (int i = 0; i < next_list->count; ++i) {
+                int v = next_list->vertices[i];
+                int beg = g->incoming_starts[v];
+                int end = (v == N - 1) ? g->num_edges : g->incoming_starts[v + 1];
+                mu -= (end - beg);
+            }
+
+#ifdef VERBOSE
+            double t1 = CycleTimer::current_seconds();
+            printf("TD frontier=%-10d %.4f sec\n", nf, t1 - t0);
+#endif
+            // swap list
+            VertexSet* tmp = frontier_list; frontier_list = next_list; next_list = tmp;
+        } else {
+            // Bottom-Up
+            std::fill(next_bm.begin(), next_bm.end(), 0);
+
+            // 你已完成的平行 Bottom-Up（回傳下一層大小）
+            produced = bottom_up_step_parallel(g,
+                                               frontier_bm.data(),
+                                               next_bm.data(),
+                                               sol->distances,
+                                               depth);
+
+            // 更新 mu：把新發現節點的 indeg 從 mu 扣掉
+            if (produced > 0) {
+                for (int v = 0; v < N; ++v)
+                    if (next_bm[v]) {
+                        int beg = g->incoming_starts[v];
+                        int end = (v == N - 1) ? g->num_edges : g->incoming_starts[v + 1];
+                        mu -= (end - beg);
+                    }
+            }
+
+#ifdef VERBOSE
+            double t1 = CycleTimer::current_seconds();
+            printf("BU frontier=%-10d %.4f sec\n", nf, t1 - t0);
+#endif
+            // swap bitmap
+            frontier_bm.swap(next_bm);
+        }
+
+        if (produced == 0) break;
+        depth++;
+    }
+
+    vertex_set_destroy(&list1);
+    vertex_set_destroy(&list2);
 }
