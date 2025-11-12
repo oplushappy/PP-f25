@@ -48,18 +48,18 @@ void construct_matrices(
 
     // B 的第 i 列第 j 欄，搬到 BT 的第 j 欄第 i 列
     if(rank == 0 && *b_mat_ptr && b_mat) {
-        // memcpy(*b_mat_ptr, b_mat, sizeof(int) * m * l);
-        int* BT = *b_mat_ptr;               // 轉置後存放位置
-        const int* B = b_mat;               // 原始 B
-        for (int row = 0; row < m; row++) {
-            const int* Bi = B + row * l;      // 原始 B 的第 i 列起點
-            for (int j = 0; j < l; ++j) {
-                // 把 B(i,j) 放到 BT 的 (j,i)
-                // BT 是以「欄 j 連續」的布局：第 j 欄起點 = BT + j*m
-                // 於是 (j,i) 的位移 = j*m + i
-                BT[j * m + row] = Bi[j];
-            }
-        }
+        memcpy(*b_mat_ptr, b_mat, sizeof(int) * m * l);
+        // int* BT = *b_mat_ptr;               // 轉置後存放位置
+        // const int* B = b_mat;               // 原始 B
+        // for (int row = 0; row < m; row++) {
+        //     const int* Bi = B + row * l;      // 原始 B 的第 i 列起點
+        //     for (int j = 0; j < l; ++j) {
+        //         // 把 B(i,j) 放到 BT 的 (j,i)
+        //         // BT 是以「欄 j 連續」的布局：第 j 欄起點 = BT + j*m
+        //         // 於是 (j,i) 的位移 = j*m + i
+        //         BT[j * m + row] = Bi[j];
+        //     }
+        // }
     }
 
     // MPI_Bcast, MPI_Ibcast - Broadcasts a message from the process with rank root to all other processes of the group.
@@ -87,14 +87,26 @@ void matrix_multiply(
     int* c_local = local_elems ? (int*)malloc(sizeof(int) * local_elems) : nullptr;
 
     // 乘法：A 為 row-major、B 為「欄連續」(每欄長度 m)
+    // for (int i = 0; i < local_rows; i++) {
+    //     const int *Ai = a_mat + i * m;   // 本地第 i 列
+    //     int *Ci       = c_local + i * l; // 對應輸出第 i 列
+    //     for (int j = 0; j < l; j++) {
+    //         const int *Bj = b_mat + j * m;   // 第 j 欄（長度 m）連續
+    //         long long acc = 0;               // 防止中途乘加溢位
+    //         for (int k = 0; k < m; ++k) {
+    //             acc += (long long)Ai[k] * Bj[k];
+    //         }
+    //         Ci[j] = (int)acc;
+    //     }
+    // }
     for (int i = 0; i < local_rows; i++) {
-        const int *Ai = a_mat + i * m;   // 本地第 i 列
-        int *Ci       = c_local + i * l; // 對應輸出第 i 列
+        const int *Ai = a_mat + i * m;
+        int *Ci       = c_local + i * l;
+
         for (int j = 0; j < l; j++) {
-            const int *Bj = b_mat + j * m;   // 第 j 欄（長度 m）連續
-            long long acc = 0;               // 防止中途乘加溢位
-            for (int k = 0; k < m; ++k) {
-                acc += (long long)Ai[k] * Bj[k];
+            long long acc = 0;
+            for (int k = 0; k < m; k++) {
+                acc += (long long)Ai[k] * b_mat[k * l + j];
             }
             Ci[j] = (int)acc;
         }
