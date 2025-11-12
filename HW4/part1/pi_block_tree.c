@@ -20,7 +20,6 @@ int main(int argc, char **argv)
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 
     // the amount process need to do
-    long long int total_count;
     long long int local_tosses = tosses / world_size;
     if (world_rank == world_size - 1) {
         local_tosses += tosses % world_size;
