@@ -46,7 +46,6 @@ void construct_matrices(
         free(displs); 
     }
 
-    // B 的第 i 列第 j 欄，搬到 BT 的第 j 欄第 i 列
     if(rank == 0 && *b_mat_ptr && b_mat) {
         memcpy(*b_mat_ptr, b_mat, sizeof(int) * m * l);
     }
@@ -81,11 +80,11 @@ void matrix_multiply(
         int *Ci       = c_local + i * l; // 對應輸出第 i 列
         for (int j = 0; j < l; j++) {
             const int *Bj = b_mat + j * m;   // 第 j 欄（長度 m）連續
-            long long acc = 0;               // 防止中途乘加溢位
+            int acc = 0;               // 防止中途乘加溢位
             for (int k = 0; k < m; ++k) {
                 acc += (long long)Ai[k] * Bj[k];
             }
-            Ci[j] = (int)acc;
+            Ci[j] = acc;
         }
     }
 
