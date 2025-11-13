@@ -74,19 +74,28 @@ void matrix_multiply(
     int local_elems = local_rows * l;
     int* c_local = local_elems ? (int*)malloc(sizeof(int) * local_elems) : nullptr;
 
-    // 乘法：A 為 row-major、B 為「欄連續」(每欄長度 m)
     for (int i = 0; i < local_rows; i++) {
-        const int *Ai = a_mat + i * m;   // 本地第 i 列
-        int *Ci       = c_local + i * l; // 對應輸出第 i 列
+        const int *Ai = a_mat + i * m;
+        int *Ci       = c_local + i * l;
         for (int j = 0; j < l; j++) {
-            const int *Bj = b_mat + j * m;   // 第 j 欄（長度 m）連續
-            int acc = 0;               // 防止中途乘加溢位
-            for (int k = 0; k < m; ++k) {
-                acc += (long long)Ai[k] * Bj[k];
+            const int *Bj = b_mat + j * m;
+            int acc = 0;
+
+            int k = 0;
+            for (; k + 3 < m; k += 4) {
+                acc += Ai[k]     * Bj[k];
+                acc += Ai[k + 1] * Bj[k + 1];
+                acc += Ai[k + 2] * Bj[k + 2];
+                acc += Ai[k + 3] * Bj[k + 3];
             }
+            for (; k < m; ++k) {   // 收尾 0~3 個
+                acc += Ai[k] * Bj[k];
+            }
+
             Ci[j] = acc;
         }
     }
+    
 
     // 收回到 rank 0
     // rank 0 先準備好「每個人要傳多少」的表格
