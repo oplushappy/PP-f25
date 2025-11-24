@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cuda.h>
+#include <cstring>  
 
 __global__ void mandel_kernel(float lower_x, 
                             float lower_y,
