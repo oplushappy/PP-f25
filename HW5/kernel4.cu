@@ -3,16 +3,11 @@
 #include <cuda.h>
 #include <cstring>  
 
-#ifndef GROUP_SIZE
-#define GROUP_SIZE 4
-#endif
-
 __global__ void mandel_kernel(float lower_x, 
                             float lower_y,
                             float step_x, 
                             float step_y,
-                            unsigned char *d_img,
-                            size_t pitch,
+                            int *d_img,
                             int res_x, 
                             int res_y,
                             int max_iterations)
@@ -22,40 +17,37 @@ __global__ void mandel_kernel(float lower_x,
     // float x = lowerX + thisX * stepX;
     // float y = lowerY + thisY * stepY;
     
-    int group_base_x = (blockIdx.x * blockDim.x + threadIdx.x) * GROUP_SIZE;
-    // int thisX = blockIdx.x * blockDim.x + threadIdx.x;
+    int thisX = blockIdx.x * blockDim.x + threadIdx.x;
     int thisY = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (thisY >= res_y) return;
+    if (thisX >= res_x || thisY >= res_y) return;
 
     // Map pixel to complex plane
     // float x = x0 + ((float)i * dx); c_re
     // float y = y0 + ((float)j * dy); c_im
+    float c_re = lower_x + thisX * step_x;
     float c_im = lower_y + thisY * step_y;
 
-    int *row_ptr = (int*)(d_img + thisY * pitch);
-    for(int k = 0; k < GROUP_SIZE; ++k) {
-        int thisX = group_base_x + k;
-        if (thisX >= res_x) break;
+    // Inline mandel() computation (same as serial)
+    float z_re = c_re, z_im = c_im;
+    int i;
+    for (i = 0; i < max_iterations; ++i)
+    {
+        float re2 = z_re * z_re;
+        float im2 = z_im * z_im;
+        if (re2 + im2 > 4.f)
+            break;
 
-        float c_re = lower_x + thisX * step_x;
-
-        // Inline mandel() computation (same as serial)
-        float z_re = c_re, z_im = c_im;
-        int i;
-        for (i = 0; i < max_iterations; ++i)
-        {
-            if (z_re * z_re + z_im * z_im > 4.f)
-                break;
-
-            float new_re = (z_re * z_re) - (z_im * z_im);
-            float new_im = 2.f * z_re * z_im;
-            z_re = c_re + new_re;
-            z_im = c_im + new_im;
-        }
-
-        row_ptr[thisX] = i;
+        // float new_re = (z_re * z_re) - (z_im * z_im);
+        float new_re = re2 - im2;
+        float new_im = 2.f * z_re * z_im;
+        z_re = c_re + new_re;
+        z_im = c_im + new_im;
     }
+
+    // int index = ((j * width) + i);
+    int idx = thisY * res_x + thisX;
+    d_img[idx] = i;
 }
 
 // Host front-end function that allocates the memory and launches the GPU kernel
@@ -74,43 +66,27 @@ void host_fe(float upper_x,
 
     const size_t num_pixels = (size_t)res_x * (size_t)res_y;
     const size_t bytes = num_pixels * sizeof(int);
-    // pitch
-    const size_t row_bytes  = (size_t)res_x * sizeof(int);
 
-    // (1) Host buffer: cudaHostAlloc
-    // Allocates page-locked memory on the host.
-    // __host__​cudaError_t cudaHostAlloc ( void** pHost, size_t size, unsigned int  flags )
-    // cudaHostAllocDefault: This flag's value is defined to be 0 and causes cudaHostAlloc() to emulate cudaMallocHost().
-    int *h_img = nullptr;
-    cudaHostAlloc((void**)&h_img, bytes, cudaHostAllocDefault);
+    // (1) Host buffer: MUST use new, NOT img directly
+    int *h_img = new int[num_pixels];
 
-    // (2) Device buffer: cudaMallocPitch
-    // __host__​cudaError_t cudaMallocPitch ( void** devPtr, size_t* pitch, size_t width, size_t height )
-    // Allocates pitched memory on the device.
-    // width - Requested pitched allocation width (in bytes)
-    // height - Requested pitched allocation height
-    unsigned char *d_img = nullptr;
-    size_t pitch = 0;
-    cudaMallocPitch((void**)&d_img, &pitch, row_bytes, res_y);
-    // row0: [ data data ... data ][ padding ... ]
-    // row1: [ data data ... data ][ padding ... ]
-    // row2: [ data data ... data ][ padding ... ]
-    // pitch = 每列「實際分配」大小（有效資料 + padding）
+    // (2) Device buffer: cudaMalloc
+    // __device__​cudaError_t cudaMalloc ( void** devPtr, size_t size )
+    int *d_img = nullptr;
+    cudaMalloc((void**)&d_img, bytes);
 
-    // (3) Launch: 1 thread GROUP_SIZE pixel
+    // (3) Launch: 1 thread per pixel
     // ceil(a / b) = (a + b - 1) / b
     dim3 block(16, 16);
-    int groups_x = (res_x + GROUP_SIZE - 1) / GROUP_SIZE;
-    dim3 grid((groups_x + block.x - 1) / block.x, (res_y + block.y - 1) / block.y);
+    dim3 grid((res_x + block.x - 1) / block.x, (res_y + block.y - 1) / block.y);
 
-    mandel_kernel<<<grid, block>>>(lower_x, lower_y, step_x, step_y, d_img, pitch, res_x, res_y, max_iterations);
+    mandel_kernel<<<grid, block>>>(lower_x, lower_y, step_x, step_y, d_img, res_x, res_y, max_iterations);
     cudaDeviceSynchronize();
 
     // (4) Copy back to host buffer
-    // __host__​cudaError_t cudaMemcpy2D ( void* dst, size_t dpitch, const void* src, size_t spitch, size_t width, size_t height, cudaMemcpyKind kind )
-    // dpitch - Pitch of destination memory
-    // spitch - Pitch of source memory
-    cudaMemcpy2D(h_img, row_bytes, d_img, pitch, row_bytes, res_y, cudaMemcpyDeviceToHost);
+    // __host__​cudaError_t cudaMemcpy ( void* dst, const void* src, size_t count, cudaMemcpyKind kind )
+    // Copies data between host and device.
+    cudaMemcpy(h_img, d_img, bytes, cudaMemcpyDeviceToHost);
 
     // (5) Copy to output img (provided by main)
     // void * memcpy ( void * destination, const void * source, size_t num ); num bytes
@@ -120,6 +96,6 @@ void host_fe(float upper_x,
     // __host__​__device__​cudaError_t cudaFree ( void* devPtr )
     // Frees memory on the device.
     cudaFree(d_img);
-    cudaFreeHost(h_img);
+    delete[] h_img;
 
 }
