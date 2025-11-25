@@ -68,7 +68,7 @@ void host_fe(float upper_x,
     const size_t bytes = num_pixels * sizeof(int);
 
     // (1) Host buffer: MUST use new, NOT img directly
-    int *h_img = new int[num_pixels];
+    // int *h_img = new int[num_pixels];
 
     // (2) Device buffer: cudaMalloc
     // __device__​cudaError_t cudaMalloc ( void** devPtr, size_t size )
@@ -86,16 +86,17 @@ void host_fe(float upper_x,
     // (4) Copy back to host buffer
     // __host__​cudaError_t cudaMemcpy ( void* dst, const void* src, size_t count, cudaMemcpyKind kind )
     // Copies data between host and device.
-    cudaMemcpy(h_img, d_img, bytes, cudaMemcpyDeviceToHost);
+    // cudaMemcpy(h_img, d_img, bytes, cudaMemcpyDeviceToHost);
+    cudaMemcpy(img, d_img, bytes, cudaMemcpyDeviceToHost);
 
     // (5) Copy to output img (provided by main)
     // void * memcpy ( void * destination, const void * source, size_t num ); num bytes
-    std::memcpy(img, h_img, bytes);
+    // std::memcpy(img, h_img, bytes);
 
     // (6) Free
     // __host__​__device__​cudaError_t cudaFree ( void* devPtr )
     // Frees memory on the device.
     cudaFree(d_img);
-    delete[] h_img;
+    // delete[] h_img;
 
 }
