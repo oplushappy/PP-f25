@@ -7,7 +7,7 @@ __global__ void mandel_kernel(float lower_x,
                             float lower_y,
                             float step_x, 
                             float step_y,
-                            int *d_img,
+                            int * __restrict__ d_img,
                             int res_x, 
                             int res_y,
                             int max_iterations)
@@ -31,6 +31,8 @@ __global__ void mandel_kernel(float lower_x,
     // Inline mandel() computation (same as serial)
     float z_re = c_re, z_im = c_im;
     int i;
+
+    #pragma unroll 4
     for (i = 0; i < max_iterations; ++i)
     {
         float re2 = z_re * z_re;
@@ -41,13 +43,14 @@ __global__ void mandel_kernel(float lower_x,
         // float new_re = (z_re * z_re) - (z_im * z_im);
         float new_re = re2 - im2;
         float new_im = 2.f * z_re * z_im;
+
         z_re = c_re + new_re;
         z_im = c_im + new_im;
     }
 
     // int index = ((j * width) + i);
-    int idx = thisY * res_x + thisX;
-    d_img[idx] = i;
+    // int idx = thisY * res_x + thisX;
+    d_img[thisY * res_x + thisX] = i;
 }
 
 // Host front-end function that allocates the memory and launches the GPU kernel
@@ -77,11 +80,11 @@ void host_fe(float upper_x,
 
     // (3) Launch: 1 thread per pixel
     // ceil(a / b) = (a + b - 1) / b
-    dim3 block(16, 16);
+    dim3 block(8, 8);
     dim3 grid((res_x + block.x - 1) / block.x, (res_y + block.y - 1) / block.y);
 
     mandel_kernel<<<grid, block>>>(lower_x, lower_y, step_x, step_y, d_img, res_x, res_y, max_iterations);
-    cudaDeviceSynchronize();
+    // cudaDeviceSynchronize();
 
     // (4) Copy back to host buffer
     // __host__​cudaError_t cudaMemcpy ( void* dst, const void* src, size_t count, cudaMemcpyKind kind )
