@@ -57,6 +57,8 @@ void host_fe(float upper_x,
 
     size_t bytes = (size_t)res_x * res_y * sizeof(int);
 
+    cudaHostRegister(img, bytes, cudaHostRegisterDefault);
+
     int *d_img;
     cudaMalloc(&d_img, bytes);
 
@@ -89,4 +91,5 @@ void host_fe(float upper_x,
     }
 
     cudaFree(d_img);
+    cudaHostUnregister(img);
 }
